@@ -3,86 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClickUp Voice Task</title>
+    <title>Voice Task Recorder</title>
 </head>
 <body>
-    <h1>Record Your Voice Task</h1>
-    <button id="startRecord">Start Recording</button>
-    <button id="stopRecord" disabled>Stop Recording</button>
-    <br><br>
-    <label for="taskDescription">Task Description:</label>
-    <textarea id="taskDescription" rows="4" cols="50"></textarea>
-    <br><br>
-    <button id="submitTask" disabled>Submit Task</button>
-
+    <h1>Record Your Voice Note for a Task</h1>
+    
+    <button id="startBtn">Start Recording</button>
+    <button id="stopBtn" disabled>Stop Recording</button>
+    <p id="status">Press "Start Recording" to begin.</p>
+    <audio id="audio" controls></audio>
+    
     <script>
         let mediaRecorder;
         let audioChunks = [];
+        let audioBlob;
+        let audioUrl;
 
-        // Access user's microphone (browser asks for permission)
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                mediaRecorder = new MediaRecorder(stream);
-                
-                // Start recording when the button is pressed
-                document.getElementById('startRecord').addEventListener('click', () => {
-                    mediaRecorder.start();
-                    document.getElementById('startRecord').disabled = true;
-                    document.getElementById('stopRecord').disabled = false;
-                });
+        // Set up recording
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
+        const audioElement = document.getElementById('audio');
 
-                // Stop recording when the button is pressed
-                document.getElementById('stopRecord').addEventListener('click', () => {
-                    mediaRecorder.stop();
-                    document.getElementById('stopRecord').disabled = true;
-                    document.getElementById('submitTask').disabled = false;
-                });
+        startBtn.addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
 
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-
-                // Create task with audio when recording stops
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    console.log("Audio recorded:", audioUrl);
-
-                    // Save the audio URL for submission
-                    window.audioUrl = audioUrl;
-                };
-            });
-
-        // Submit the task to ClickUp
-        document.getElementById('submitTask').addEventListener('click', () => {
-            const taskDescription = document.getElementById('taskDescription').value;
-            const audioUrl = window.audioUrl;
-
-            const taskData = {
-                name: "Voice Task",  // Task name
-                description: taskDescription + "\nAudio URL: " + audioUrl,  // Task description + audio link
-                status: 'open',  // Default task status
-                assignees: []  // Add assignees as needed
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
             };
 
-            fetch('https://api.clickup.com/api/v2/list/{8cmt0k6-94}/task', {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(taskData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Task created:', data);
-                alert('Task created successfully!');
-            })
-            .catch(error => {
-                console.error('Error creating task:', error);
-                alert('Error creating task.');
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                audioUrl = URL.createObjectURL(audioBlob);
+                audioElement.src = audioUrl;
+                status.textContent = "Recording stopped. Ready to submit.";
+            };
+
+            mediaRecorder.start();
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            status.textContent = "Recording...";
+
+            stopBtn.addEventListener('click', () => {
+                mediaRecorder.stop();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
             });
         });
+
+        // Function to upload the audio to ClickUp and create a task
+        async function createClickUpTask(audioBlob) {
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'voice-note.wav');
+
+            // API endpoint for uploading files to ClickUp
+            const uploadUrl = 'https://api.clickup.com/api/v2/file';
+            const uploadHeaders = {
+                'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2'  // Your ClickUp API token
+            };
+
+            // Upload the audio file to ClickUp
+            const uploadResponse = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: uploadHeaders,
+                body: formData
+            });
+            const uploadData = await uploadResponse.json();
+            
+            if (uploadData && uploadData.id) {
+                // Create a task with the uploaded file's URL or ID
+                const taskUrl = 'https://api.clickup.com/api/v2/task';
+                const taskHeaders = {
+                    'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2',
+                    'Content-Type': 'application/json'
+                };
+
+                const taskData = {
+                    name: 'Voice Note Task',
+                    description: `Task created with voice note: ${uploadData.url}`,  // Add the file URL in the description
+                    assignees: ['user-id'], // Add the assignee ID if needed
+                    tags: ['voice-note'],
+                    priority: 3,
+                    status: 'to do'
+                };
+
+                const taskResponse = await fetch(taskUrl, {
+                    method: 'POST',
+                    headers: taskHeaders,
+                    body: JSON.stringify(taskData)
+                });
+                const taskResult = await taskResponse.json();
+
+                if (taskResult.id) {
+                    alert('Task created successfully!');
+                } else {
+                    alert('Failed to create task');
+                }
+            } else {
+                alert('Failed to upload file');
+            }
+        }
+
+        // Add a button or other action to create the task after recording
+        document.getElementById('createTaskBtn').addEventListener('click', () => {
+            if (audioBlob) {
+                createClickUpTask(audioBlob);
+            } else {
+                alert('No audio recorded!');
+            }
+        });
     </script>
+
+    <!-- Add this button to trigger task creation -->
+    <button id="createTaskBtn">Create Task with Voice Note</button>
 </body>
 </html>
