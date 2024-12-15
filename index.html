@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voice Task Recorder</title>
+    <style>
+        /* Styling for the success notification */
+        .success-notification {
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border-radius: 5px;
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     <h1>Record Your Voice Note for Review</h1>
@@ -12,6 +23,11 @@
     <button id="stopBtn" disabled>Stop Recording</button>
     <p id="status">Press "Start Recording" to begin.</p>
     <audio id="audio" controls></audio>
+    
+    <!-- Success notification (initially hidden) -->
+    <div id="successNotification" class="success-notification" style="display: none;">
+        Voice note sent successfully!
+    </div>
     
     <script>
         let mediaRecorder;
@@ -24,6 +40,19 @@
         const stopBtn = document.getElementById('stopBtn');
         const status = document.getElementById('status');
         const audioElement = document.getElementById('audio');
+        const successNotification = document.getElementById('successNotification');
+
+        // Function to reset the page for a new recording
+        function resetPage() {
+            audioChunks = [];
+            audioBlob = null;
+            audioUrl = null;
+            audioElement.src = '';
+            successNotification.style.display = 'none'; // Hide success message
+            status.textContent = 'Press "Start Recording" to begin.';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
 
         startBtn.addEventListener('click', async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -44,15 +73,16 @@
             startBtn.disabled = true;
             stopBtn.disabled = false;
             status.textContent = "Recording...";
-
-            stopBtn.addEventListener('click', () => {
-                mediaRecorder.stop();
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-            });
         });
 
-        // Function to send the voice note as a message (comment) to ClickUp inbox task
+        // Stop recording when stop button is clicked
+        stopBtn.addEventListener('click', () => {
+            mediaRecorder.stop();
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        });
+
+        // Function to send the voice note to ClickUp inbox as a comment
         async function sendToInbox(audioBlob) {
             const formData = new FormData();
             formData.append('file', audioBlob, 'voice-note.wav');
@@ -60,7 +90,7 @@
             // API endpoint for uploading files to ClickUp
             const uploadUrl = 'https://api.clickup.com/api/v2/file';
             const uploadHeaders = {
-                'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2'  // Your ClickUp API token
+                'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2'  // Replace with your API token
             };
 
             // Upload the audio file to ClickUp
@@ -72,48 +102,8 @@
             const uploadData = await uploadResponse.json();
             
             if (uploadData && uploadData.id) {
-                // Assuming you have a task to use as your inbox for messages
-                const inboxTaskId = '9014379110'; // Replace this with your actual task ID
-                
+                // Replace with your inbox task ID
+                const inboxTaskId = '9014379110/inbox?tab=important'; 
+
                 const commentUrl = `https://api.clickup.com/api/v2/task/${inboxTaskId}/comment`;
-                const commentHeaders = {
-                    'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2',
-                    'Content-Type': 'application/json'
-                };
-
-                const commentData = {
-                    "comment_text": `Voice note received: ${uploadData.url}`,  // Message with the file URL
-                    "attachments": [{ "file_url": uploadData.url }]  // Attach the uploaded file to the comment
-                };
-
-                const commentResponse = await fetch(commentUrl, {
-                    method: 'POST',
-                    headers: commentHeaders,
-                    body: JSON.stringify(commentData)
-                });
-                const commentResult = await commentResponse.json();
-
-                if (commentResult.id) {
-                    alert('Voice note sent to inbox successfully!');
-                } else {
-                    alert('Failed to send voice note');
-                }
-            } else {
-                alert('Failed to upload file');
-            }
-        }
-
-        // Add a button or other action to send the message after recording
-        document.getElementById('createTaskBtn').addEventListener('click', () => {
-            if (audioBlob) {
-                sendToInbox(audioBlob);
-            } else {
-                alert('No audio recorded!');
-            }
-        });
-    </script>
-
-    <!-- Add this button to trigger sending the voice note to inbox -->
-    <button id="createTaskBtn">Send to Inbox</button>
-</body>
-</html>
+                const commentHeade
