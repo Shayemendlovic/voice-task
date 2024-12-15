@@ -6,7 +6,7 @@
     <title>Voice Task Recorder</title>
 </head>
 <body>
-    <h1>Record Your Voice Note for a Task</h1>
+    <h1>Record Your Voice Note for Review</h1>
     
     <button id="startBtn">Start Recording</button>
     <button id="stopBtn" disabled>Stop Recording</button>
@@ -37,7 +37,7 @@
                 audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                 audioUrl = URL.createObjectURL(audioBlob);
                 audioElement.src = audioUrl;
-                status.textContent = "Recording stopped. Ready to submit.";
+                status.textContent = "Recording stopped. Ready to send.";
             };
 
             mediaRecorder.start();
@@ -52,8 +52,8 @@
             });
         });
 
-        // Function to upload the audio to ClickUp and create a task
-        async function createClickUpTask(audioBlob) {
+        // Function to send the voice note as a message (comment) to ClickUp inbox task
+        async function sendToInbox(audioBlob) {
             const formData = new FormData();
             formData.append('file', audioBlob, 'voice-note.wav');
 
@@ -72,50 +72,48 @@
             const uploadData = await uploadResponse.json();
             
             if (uploadData && uploadData.id) {
-                // Create a task with the uploaded file's URL or ID
-                const taskUrl = 'https://api.clickup.com/api/v2/task';
-                const taskHeaders = {
+                // Assuming you have a task to use as your inbox for messages
+                const inboxTaskId = '9014379110'; // Replace this with your actual task ID
+                
+                const commentUrl = `https://api.clickup.com/api/v2/task/${inboxTaskId}/comment`;
+                const commentHeaders = {
                     'Authorization': 'Bearer pk_96066229_ATE4227YDPV7ZL64F79OSMJNEW7UD4Y2',
                     'Content-Type': 'application/json'
                 };
 
-                const taskData = {
-                    name: 'Voice Note Task',
-                    description: `Task created with voice note: ${uploadData.url}`,  // Add the file URL in the description
-                    assignees: ['user-id'], // Add the assignee ID if needed
-                    tags: ['voice-note'],
-                    priority: 3,
-                    status: 'to do'
+                const commentData = {
+                    "comment_text": `Voice note received: ${uploadData.url}`,  // Message with the file URL
+                    "attachments": [{ "file_url": uploadData.url }]  // Attach the uploaded file to the comment
                 };
 
-                const taskResponse = await fetch(taskUrl, {
+                const commentResponse = await fetch(commentUrl, {
                     method: 'POST',
-                    headers: taskHeaders,
-                    body: JSON.stringify(taskData)
+                    headers: commentHeaders,
+                    body: JSON.stringify(commentData)
                 });
-                const taskResult = await taskResponse.json();
+                const commentResult = await commentResponse.json();
 
-                if (taskResult.id) {
-                    alert('Task created successfully!');
+                if (commentResult.id) {
+                    alert('Voice note sent to inbox successfully!');
                 } else {
-                    alert('Failed to create task');
+                    alert('Failed to send voice note');
                 }
             } else {
                 alert('Failed to upload file');
             }
         }
 
-        // Add a button or other action to create the task after recording
+        // Add a button or other action to send the message after recording
         document.getElementById('createTaskBtn').addEventListener('click', () => {
             if (audioBlob) {
-                createClickUpTask(audioBlob);
+                sendToInbox(audioBlob);
             } else {
                 alert('No audio recorded!');
             }
         });
     </script>
 
-    <!-- Add this button to trigger task creation -->
-    <button id="createTaskBtn">Create Task with Voice Note</button>
+    <!-- Add this button to trigger sending the voice note to inbox -->
+    <button id="createTaskBtn">Send to Inbox</button>
 </body>
 </html>
